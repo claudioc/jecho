@@ -1,0 +1,619 @@
+#!/usr/bin/env node
+
+var http     = require('http')
+  , readline = require("readline")
+  , util     = require("util")
+  , fs       = require('fs')
+  , path     = require('path')
+  , events   = require('events');
+
+var WebSocketServer
+  , WebSocketRequest
+  , Mixin
+  , miksagoConnection
+  , program;
+
+try {
+  WebSocketServer   = require('websocket-server');
+  WebSocketRequest  = require('websocket').request;
+  Mixin             = require('websocket-server/lib/lang/mixin');
+  miksagoConnection = require('websocket-server/lib/ws/connection');
+  program           = require('commander');
+} catch(e) {
+  console.log("You probably need to install the following modules: websocket-server, websocket, commander.");
+  console.log("Locally with `npm install websocket-server websocket commander` or globally with `sudo npm install -g websocket-server websocket commander`");
+  process.exit(1);
+}
+
+program
+  .version('0.1.0')
+  .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
+  .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
+  .parse(process.argv);
+
+var Readliner = function() {
+
+  events.EventEmitter.call(this);
+
+  this.interface = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  //  completer: completer
+  });
+
+  this.historyFile = '.jecho-history';
+
+  this.previousLine = null;
+
+  this.interface.on('SIGINT', (function() {
+    this.interface.close();
+    console.log("\n<Press ^C again to exit>");
+  }).bind(this));
+
+  this.interface.on('line', (function(line) {
+    this.emit("line", line);
+    this.writeHistory(line);
+  }).bind(this));
+
+  /*
+  function completer(line) {
+    var completions = ''.split(' ')
+    var hits = completions.filter(function(c) { return c.indexOf(line) == 0 })
+    return [hits.length ? hits : completions, line]  
+  }
+  */
+}
+
+util.inherits(Readliner, events.EventEmitter);
+
+Readliner.prototype.prompt = function() {
+  this.interface.prompt(true);
+}
+
+Readliner.prototype.loadHistory = function() {
+  var filePath = path.join(process.env.HOME, this.historyFile);
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  var cmdHistory = fs.readFileSync(filePath, 'utf8').split('\n');
+  // filter and reverse and limit
+  cmdHistory = cmdHistory.filter(function(line) { return line.trim().length > 0; });
+  // @todo: also filter two identical commands one after another
+  return cmdHistory.reverse().slice(0, 200); 
+}
+
+Readliner.prototype.writeHistory = function(line) {
+  if (line.trim().length>0 && !(this.previousLine && this.previousLine == line)) {
+    this.previousLine = line;
+    this.history.write(line + '\n');
+  }
+}
+
+Readliner.prototype.start = function() {
+  this.history = fs.createWriteStream(path.join(process.env.HOME, this.historyFile), { flags: 'a' });
+  this.interface.history = this.loadHistory();
+  this.interface.prompt(true);
+}
+
+Readliner.prototype.setPrompt = function(p) {
+  this.interface.setPrompt(p);
+}
+
+function main() {
+
+  var port = program.port || 6767;
+
+  var clients = [];
+  var currentClient = null;
+
+  var prompto = null;
+  var useNL = false;
+
+  var rl = new Readliner();
+
+  rl.setPrompt("(0)> ");
+
+  var httpServer = http.createServer(function (request, response) {
+   
+    var content = ""
+      , status = 200
+      , mime = 'text/html'
+      , ua = request.headers['user-agent'];
+
+    switch (request.url) {
+
+      case '/':
+        content = "Welcome";
+        break;
+
+      // If not supporting websocket...
+      case '/log':
+        var body = '';
+        request.on('data', function (data) {
+          body += data;
+        });
+        request.on('end', function () {
+          output(body, request.connection.remoteAddress);
+        });
+        break;
+
+      case '/jecho.js':
+        var lines = [], i=0;
+        var asString;
+
+        lines[i++] = ";(function(window) {";
+        lines[i++] = "var jecho = {";
+        for (var x in jecho) {
+          asString = jecho[x].toString();
+          asString = asString.replace("\"%USEXHR%\"", !!program.xhr);
+          lines[i++] = "  " + x + ": " + ( util.isArray(jecho[x]) ? ( "[" + asString + "]" ) : asString ) + ",";
+        }
+        lines[i++] = "};";
+        lines[i++] = "jecho.init();";
+        lines[i++] = "window.jecho = jecho;";
+        lines[i++] = "})(this);";
+        content = lines.join("\n");
+        mime = "text/javascript";
+        break;
+
+      default:
+        content = "Page not found";
+        status = 404;
+        break;
+
+    }
+
+    response.writeHead(status, { 'Content-Type': mime, "Access-Control-Allow-Origin": "*" });
+    response.end(content, 'utf-8');
+
+  }).listen(port);
+
+  httpServer.on("error", function(e) {
+    console.log(e.toString())
+    process.exit(1);
+  })
+
+  var server = new ConnectionServer({httpServer: httpServer});
+
+  server.on('connection', function(conn) {
+
+    clients.push(conn);
+
+    currentClient = conn;
+
+    output("New " + conn.specs + " WebSocket client connected (" + conn.remoteAddress + ")");
+
+    conn.on('message', function(msg) {
+
+      currentClient = conn;
+
+      output(msg, conn.remoteAddress);
+
+    });
+
+    conn.on('close', function() {
+
+      output("Client " + currentClient.remoteAddress + " disconnected");
+
+      // Current client is about to close. Find another one
+      if (currentClient == conn) {
+        currentClient = null;
+      }
+
+      for (var i=0; i < clients.length; i++) {
+        if (clients[i] == conn) {
+          clients.splice(i,1);
+          break;
+        }
+      }
+
+      if (clients.length > 0) {
+        currentClient = clients[0];
+      }
+
+      prompt(false);
+
+    });
+
+  });
+
+  rl.on("line", function(line) {
+
+    if ("" == line.trim()) {
+      prompt(false);
+      return;      
+    }
+
+    if (program.xhr) {
+      output("Using XHR: sorry, cannot send.");
+      prompt(false);
+      return;      
+    }
+
+    prompt(true);
+
+    if (currentClient) {
+      currentClient.send( '? ' + line );
+    }
+
+  });
+
+  setTimeout(function() {
+    rl.start();
+  }, 100);
+
+  output('Starting Jecho server on port ' + port + '...');
+
+  function prompt(whiny) {
+    var n = clients.length;
+    if (!currentClient && whiny) {
+      output("I feel alone...");
+    }
+    rl.setPrompt("(" + n + ( n > 0 ? (":" + currentClient.remoteAddress) : '' ) + ")> ");
+    rl.prompt();
+    useNL = true;
+  }
+
+  function output(msg, subject) {
+
+    if (!subject) {
+      subject = "<System>";
+    }    
+
+    var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
+
+    util.print((useNL ? "\n" : "") + d + " - " + subject.color("cyan") + " - " + msg.color("yellow") + "\n");
+
+    clearTimeout(prompto);
+    prompto = setTimeout(function() {
+      prompt(false);
+    }, 2000);
+    useNL = false;
+  }
+
+}
+
+// This is going to run in the Browser
+
+var jecho = {
+
+  initialized: false,
+
+  version: "0.1",
+
+  buffer: [],
+
+  init: function() {
+
+    var _self = this;
+
+    this.useXHR = "%USEXHR%";
+
+    this.serverURL = this.getServerURL();
+
+    if (!this.useXHR) {
+
+      this.wsocket = new WebSocket(this.serverURL.replace("http", "ws"));
+
+      this.wsocket.addEventListener("open", function(event) {
+
+        _self.wsocket.send(navigator.userAgent);
+
+        for (var i=0; i < _self.buffer.length; i++) {
+          _self.wsocket.send( _self.buffer[i] );
+        }
+
+        _self.buffer.length = 0;
+
+      });    
+
+      this.wsocket.addEventListener("message", function(event) {
+        
+        var command = event.data.split(" ");
+
+        switch (command[0]) {
+
+          case '?':
+            try {
+              // console.log(command.slice(1).join(" "));
+              _self.wsSend(JSON.stringify(eval("(" + command.slice(1).join(" ") + ")"), undefined, 2));
+            } catch(e) {
+              _self.wsSend("ERR: " + e.message);
+            }
+            break;
+
+        }
+      });
+
+      this.wsocket.addEventListener("close", function(event) {
+        this.initialized = false;
+      });
+
+    } else {
+      this.xhrSend(navigator.userAgent);
+    }
+    
+    this.initialized = true;
+  },
+
+  wsSend: function(m) {
+
+    if (this.wsocket.readyState === 0) {
+      this.buffer.push(m);
+      return;
+    }
+
+    this.wsocket.send(m);
+  },
+
+  xhrSend: function(m) {
+    var xhr;
+    xhr = new XMLHttpRequest();
+    xhr.open('POST', this.serverURL + 'log', true);
+    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.send(m);
+  },
+
+  send: function(m) {
+    this.useXHR ? this.xhrSend(m) : this.wsSend(m);
+  },
+
+  log: function(m) {
+
+    if (!this.initialized) {
+      this.init();
+    }
+
+    this.send(JSON.stringify(m, undefined, 2));
+  },
+
+  safariVersion: function() {
+    return parseInt(window.navigator.userAgent.match(/Version\/(.*?)\s/)[1][0], 10);
+  },
+
+  isSafariOnIOS: function() {
+    return !!window.navigator.userAgent.match(/safari/i) && !!window.navigator.userAgent.match(/(iPad|iPhone|iPod)/i);
+  },
+
+  getServerURL: function() {
+    var pattern = /(http:\/\/(.*?)\/)/
+      , match;
+
+    script = findScript();
+
+    match = pattern.exec(script.src);
+
+    return match ? match[1] : null;
+
+    function findScript() {
+      var elements = document.getElementsByTagName("script")
+        , scripts = ["jecho.", "jecho.min."]
+        , i
+        , j
+        , element;
+
+      for (i = 0; i < elements.length; i++) {
+        element = elements[i];
+        for (j=0; j < scripts.length; j++) {
+          if (-1 != element.src.indexOf("/" + scripts[j])) {
+            return element;
+          }
+        }
+      }
+    }
+  }
+};
+
+// Extends the core String object to add a simple ANSI colouring
+// https://github.com/Yuffster/npm-string-ansi/blob/master/string-ansi.js
+String.prototype.color = function() {
+  if (!arguments) {
+    return this;
+  } 
+
+  var colors, code = '';
+
+  if (arguments.length == 1 && typeof colors == "string") {
+    colors = [arguments[i]];
+  }
+
+  colors = arguments;
+  for (var i = 0; i < colors.length; i++) {
+    code += ANSI.get(colors[i]);
+  }
+
+  return code + this + ANSI.get('reset');
+};
+
+var ANSI = {
+
+  'prefix'    : "\u001B[",
+  'suffix'    : "m",
+
+  //Styles
+  
+  'reset'     :  0,
+  'bold'      :  1,
+  '/bold'     : 22,
+  'italic'    :  3,
+  '/italic'   : 23,
+  'underline' :  4,
+  '/underline': 24,
+  'conceal'   :  8,
+  'strike'    :  9,
+  '/strike'   : 29,
+  'reverse'   :  7,
+  'blink'     :  5,
+  'blink2'    :  6,
+  
+  //Colors
+  
+  'black'     : 30,
+  'red'       : 31,
+  'green'     : 32,
+  'yellow'    : 33,
+  'blue'      : 34,
+  'purple'    : 35,
+  'cyan'      : 36,
+  'white'     : 37,
+  'default'   : 39,
+
+  //Backgrounds
+
+  'bgblack'   : 40,
+  'bgred'     : 41,
+  'bggreen'   : 42,
+  'bgyellow'  : 43,
+  'bgblue'    : 44,
+  'bgpurple'  : 45,
+  'bgcyan'    : 46,
+  'bgwhite'   : 47,
+  'bgdefault' : 49,
+
+  'get': function(color) {
+    var code = this[color];
+    if (code === false) {
+      return 0;
+    } 
+    return this.prefix + code + this.suffix;
+  }
+
+};
+
+// Proxy and Server class to support legacy web socket implementation as well as newest version
+// https://github.com/wcauchois/websocket-fallback
+
+function ConnectionProxy(conn, server) {
+
+  events.EventEmitter.call(this);
+
+  this._conn = conn;
+  this._server = server;
+  this.storage = {};
+  this.remoteAddress = this._conn.remoteAddress;
+  this.specs = this._conn.specs;
+
+  this._conn.on('message', (function(msg) {
+    if (typeof msg.type !== 'undefined') {
+      if (msg.type !== 'utf8') {
+        return;
+      }
+      msg = msg.utf8Data;
+    }
+    this.emit('message', msg);
+  }).bind(this));
+
+  this._conn.on('close', (function() {
+    this.emit('close');
+    this._server.emit('close', this);
+  }).bind(this));
+}
+
+util.inherits(ConnectionProxy, events.EventEmitter);
+
+ConnectionProxy.prototype.send = function(msg) {
+  if (typeof this._conn.sendUTF == 'function') {
+    this._conn.sendUTF(msg);
+  } else {
+    this._conn.send(msg);
+  }
+};
+
+function ConnectionServer(options) {
+  events.EventEmitter.call(this);
+  options = options || {};
+
+  this.httpServer = options.httpServer;
+  this.miksagoServer = WebSocketServer.createServer();
+  this.miksagoServer.server = this.httpServer;
+
+  this._err = options.err || function(e) { };
+  this.config = Mixin({
+    maxReceivedFrameSize: 0x10000,
+    maxReceivedMessageSize: 0x100000,
+    fragmentOutgoingMessages: true,
+    fragmentationThreshold: 0x4000,
+    keepalive: true,
+    keepaliveInterval: 20000,
+    assembleFragments: true,
+    disableNagleAlgorithm: true,
+    closeTimeout: 5000
+  }, options.config);
+
+  this.miksagoServer.on('connection', (function(conn) {
+    conn.remoteAddress = conn._socket.remoteAddress;
+    conn.specs = 'legacy';
+    this._handleConnection(conn);
+  }).bind(this));
+
+  this.httpServer.on('upgrade', (function(req, socket, head) {
+
+    if (typeof req.headers['sec-websocket-version'] !== 'undefined') {
+      var wsRequest = new WebSocketRequest(socket, req, this.config);
+      try {
+        wsRequest.readHandshake();
+        var wsConnection = wsRequest.accept(wsRequest.requestedProtocols[0], wsRequest.origin);
+        wsConnection.specs = 'current';
+        this._handleConnection(wsConnection);
+      } catch(e) {
+        this._err(new Error('websocket request unsupported by WebSocket-Node: ' + e.toString()));
+        return;
+      }
+    } else {
+      this.specs = 'legacy';
+      if (req.method == 'GET' &&
+         (req.headers.upgrade && req.headers.connection) &&
+         req.headers.upgrade.toLowerCase() === 'websocket' &&
+         req.headers.connection.toLowerCase() === 'upgrade') {
+        new miksagoConnection(this.miksagoServer.manager, this.miksagoServer.options, req, socket, head);
+      }
+    }
+
+  }).bind(this));
+}
+
+util.inherits(ConnectionServer, events.EventEmitter);
+
+ConnectionServer.prototype._handleConnection = function(conn) {
+  this.emit('connection', new ConnectionProxy(conn, this));
+}
+
+ConnectionServer.prototype.listen = function(port, hostname, callback) {
+  this.httpServer.listen(port, hostname, callback);
+}
+
+main();
+ 
+/*
+  
+  This is for when we'll forget iOS < 6
+
+  wsServer = new websocket.server({
+    httpServer: httpServer,
+    autoAcceptConnections: false
+  });
+
+  wsServer.on('request', function(request) {
+
+    var connection = request.accept('conjole-protocol', request.origin);
+
+    clients[connection.remoteAddress] = connection;
+
+    connection.on('message', function(message) {
+
+      currentClient = connection;
+
+      if (message.type === 'utf8') {
+        output(message.utf8Data, connection.remoteAddress);
+      }
+
+    });
+
+    connection.on('close', function(reasonCode, description) {
+      if (currentClient.remoteAddress == connection.remoteAddress) {
+        currentClient = null;
+      }
+      delete clients[connection.remoteAddress];
+    });
+  });
+*/
