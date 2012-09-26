@@ -35,7 +35,14 @@ Installation
 
 `npm install jecho`
 
+or download everything and just run `npm install`
+
 Dependencies: `websocket`, `websocket-server`, `commander`
+
+Note for OSX brew users: npm is not installed along the installation of nodejs (a package manager won't install another package manager).
+Just run `brew install npm` and read the provided instructions.
+
+Note for Ubuntu users: everything is fine, except for users of some old 11.x distribution (problems with... Python. Don't ask).
 
 Usage
 -----
