@@ -1,9 +1,13 @@
 {
   "name": "jecho",
   "version": "0.1.0",
-  "description": "Remote JavaScript console for browsers",
+  "description": "JavaScript remote web debugging tool",
   "author": "Claudio Cicali <claudio.cicali@gmail.com>",
   "main": "jecho.js",
+  "repository" :
+    { "type" : "git",
+      "url" : "https://github.com/claudioc/jecho"
+    },
   "dependencies": {
     "commander": ">=0.1.0",
     "websocket": ">=0.1.0",
