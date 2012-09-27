@@ -41,7 +41,7 @@ if (program.info) {
   console.log("\njecho is a remote JavaScript debugger");
   console.log("\nThe author is Claudio Cicali <claudio.cicali@gmail.com>");
   console.log("\nThe github repository is https://github.com/claudioc/jecho");
-  console.log("\nIn your web page: <script src=\"http://<the jecho server IP address - not 127.0.0.1>/jecho.js\"></script>");
+  console.log("\nIn your web page: <script src=\"http://<the jecho server IP address and port - not 127.0.0.1>/jecho.js\"></script>");
   console.log("\nThanks for using jecho.\n");
   process.exit(0);
 }

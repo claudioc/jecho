@@ -52,7 +52,7 @@ Run the jecho server with -h to read about a couple of options it accepts.
 Insert a JavaScript script tag in the page which you want to enhance with jecho:
 
 ```html
-<script src="http://<jecho server ip address >/jecho.js"></script>
+<script src="http://<jecho server ip address and port>/jecho.js"></script>
 <script>
  jecho.log("Hello from the jecho client!");
 </script>
