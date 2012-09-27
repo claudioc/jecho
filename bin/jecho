@@ -31,7 +31,7 @@ try {
 }
 
 program
-  .version('0.1.3')
+  .version('0.1.4')
   .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
   .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
   .option('-i, --info', 'Output program informations')
@@ -50,11 +50,15 @@ var Readliner = function() {
 
   events.EventEmitter.call(this);
 
-  this.interface = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  //  completer: completer
-  });
+  try {
+    this.interface = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+      //  completer: completer
+    });
+  } catch (e) { // For node 0.6.x
+    this.interface = readline.createInterface(process.stdin, process.stdout, null);
+  }
 
   this.historyFile = '.jecho-history';
 
@@ -74,7 +78,7 @@ var Readliner = function() {
   function completer(line) {
     var completions = ''.split(' ')
     var hits = completions.filter(function(c) { return c.indexOf(line) == 0 })
-    return [hits.length ? hits : completions, line]  
+    return [hits.length ? hits : completions, line]
   }
   */
 }
@@ -86,15 +90,18 @@ Readliner.prototype.prompt = function() {
 }
 
 Readliner.prototype.loadHistory = function() {
+  // 0.8.x moved exists on fs
+  var existsSync = (fs.existsSync) ? fs.existsSync : path.existsSync;
+
   var filePath = path.join(process.env.HOME, this.historyFile);
-  if (!fs.existsSync(filePath)) {
+  if (!existsSync(filePath)) {
     return [];
   }
   var cmdHistory = fs.readFileSync(filePath, 'utf8').split('\n');
   // filter and reverse and limit
   cmdHistory = cmdHistory.filter(function(line) { return line.trim().length > 0; });
   // @todo: also filter two identical commands one after another
-  return cmdHistory.reverse().slice(0, 200); 
+  return cmdHistory.reverse().slice(0, 200);
 }
 
 Readliner.prototype.writeHistory = function(line) {
@@ -129,7 +136,7 @@ function main() {
   rl.setPrompt("(0)> ");
 
   var httpServer = http.createServer(function (request, response) {
-   
+
     var content = ""
       , status = 200
       , mime = 'text/html'
@@ -236,13 +243,13 @@ function main() {
 
     if ("" == line.trim()) {
       prompt(false);
-      return;      
+      return;
     }
 
     if (program.xhr) {
       output("Using XHR: sorry, cannot send.");
       prompt(false);
-      return;      
+      return;
     }
 
     prompt(true);
@@ -273,7 +280,7 @@ function main() {
 
     if (!subject) {
       subject = "<System>";
-    }    
+    }
 
     var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
 
@@ -282,7 +289,7 @@ function main() {
     clearTimeout(prompto);
     prompto = setTimeout(function() {
       prompt(false);
-    }, 2000);
+    }, 500);
     useNL = false;
   }
 
@@ -320,10 +327,10 @@ var jecho = {
 
         _self.buffer.length = 0;
 
-      });    
+      });
 
       this.wsocket.addEventListener("message", function(event) {
-        
+
         var command = event.data.split(" ");
 
         switch (command[0]) {
@@ -347,7 +354,7 @@ var jecho = {
     } else {
       this.xhrSend(navigator.userAgent);
     }
-    
+
     this.initialized = true;
   },
 
@@ -446,7 +453,7 @@ var ANSI = {
   'suffix'    : "m",
 
   //Styles
-  
+
   'reset'     :  0,
   'bold'      :  1,
   '/bold'     : 22,
@@ -460,9 +467,9 @@ var ANSI = {
   'reverse'   :  7,
   'blink'     :  5,
   'blink2'    :  6,
-  
+
   //Colors
-  
+
   'black'     : 30,
   'red'       : 31,
   'green'     : 32,
@@ -598,9 +605,9 @@ ConnectionServer.prototype.listen = function(port, hostname, callback) {
 }
 
 main();
- 
+
 /*
-  
+
   This is for when we'll forget iOS < 6
 
   wsServer = new websocket.server({
