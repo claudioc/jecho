@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+/* Jecho server by Claudio Cicali <claudio.cicali@gmail.com>
+ * Released under the MIT license
+ * See also https://github.com/claudioc/jecho/blob/master/README.md
+ */
+
 var http     = require('http')
   , readline = require("readline")
   , util     = require("util")
@@ -20,16 +25,26 @@ try {
   miksagoConnection = require('websocket-server/lib/ws/connection');
   program           = require('commander');
 } catch(e) {
-  console.log("You probably need to install the following modules: websocket-server, websocket, commander.");
+  console.log("You probably need to install the following modules: websocket-server, websocket, commander");
   console.log("Locally with `npm install websocket-server websocket commander` or globally with `sudo npm install -g websocket-server websocket commander`");
   process.exit(1);
 }
 
 program
-  .version('0.1.0')
+  .version('0.1.1')
   .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
   .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
+  .option('-i, --info', 'Output program informations')
   .parse(process.argv);
+
+if (program.info) {
+  console.log("\njecho is a remote JavaScript debugger");
+  console.log("\nThe author is Claudio Cicali <claudio.cicali@gmail.com>");
+  console.log("\nThe github repository is https://github.com/claudioc/jecho");
+  console.log("\nIn your web page: <script src=\"http://<the jecho server IP address - not 127.0.0.1>/jecho.js\"></script>");
+  console.log("\nThanks for using jecho.\n");
+  process.exit(0);
+}
 
 var Readliner = function() {
 
