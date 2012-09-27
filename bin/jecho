@@ -331,7 +331,7 @@ var jecho = {
           case '?':
             try {
               // console.log(command.slice(1).join(" "));
-              _self.wsSend(JSON.stringify(eval("(" + command.slice(1).join(" ") + ")"), undefined, 2));
+              _self.wsSend(JSON.stringify(eval( command.slice(1).join(" ") ), undefined, 2));
             } catch(e) {
               _self.wsSend("ERR: " + e.message);
             }
