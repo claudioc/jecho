@@ -31,7 +31,7 @@ try {
 }
 
 program
-  .version('0.1.4')
+  .version('0.1.5')
   .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
   .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
   .option('-i, --info', 'Output program informations')
@@ -332,15 +332,20 @@ var jecho = {
       this.wsocket.addEventListener("message", function(event) {
 
         var command = event.data.split(" ");
+        var result;
 
         switch (command[0]) {
 
           case '?':
             try {
-              // console.log(command.slice(1).join(" "));
-              _self.wsSend(JSON.stringify(eval( command.slice(1).join(" ") ), undefined, 2));
+              result = eval( command.slice(1).join(" ") );
+              _self.wsSend(JSON.stringify(result, undefined, 2));
             } catch(e) {
-              _self.wsSend("ERR: " + e.message);
+              if (typeof result != 'undefined') {
+                _self.wsSend(JSON.stringify(Object.getOwnPropertyNames(result).sort(), undefined, 2));
+              } else {
+                _self.wsSend("ERR: " + e.message);
+              }
             }
             break;
 
