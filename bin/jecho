@@ -10,9 +10,8 @@ var http     = require('http')
   , util     = require("util")
   , fs       = require('fs')
   , path     = require('path')
-  , events   = require('events');
-
-var WebSocketServer
+  , events   = require('events')
+  , WebSocketServer
   , WebSocketRequest
   , Mixin
   , miksagoConnection
@@ -30,8 +29,10 @@ try {
   process.exit(1);
 }
 
+var version = "0.1.6";
+
 program
-  .version('0.1.5')
+  .version(version)
   .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
   .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
   .option('-i, --info', 'Output program informations')
@@ -168,6 +169,7 @@ function main() {
         for (var x in jecho) {
           asString = jecho[x].toString();
           asString = asString.replace("\"%USEXHR%\"", !!program.xhr);
+          asString = asString.replace("%VERSION%", "\"" + version + "\"");
           lines[i++] = "  " + x + ": " + ( util.isArray(jecho[x]) ? ( "[" + asString + "]" ) : asString ) + ",";
         }
         lines[i++] = "};";
@@ -301,7 +303,7 @@ var jecho = {
 
   initialized: false,
 
-  version: "0.1",
+  version: "%VERSION%",
 
   buffer: [],
 
@@ -613,7 +615,7 @@ main();
 
 /*
 
-  This is for when we'll forget iOS < 6
+  This is for when we'll be able to forget iOS < 6
 
   wsServer = new websocket.server({
     httpServer: httpServer,

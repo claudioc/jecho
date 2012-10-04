@@ -73,6 +73,6 @@ THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 Credits
 -------
 
-Claudio Cicali <claudio.cicali@gmail.com>
+Claudio Cicali <claudio.cicali@gmail.com>, [@caludio](http://twitter.com/caludio) on Twitter
 
 [wcauchois](https://github.com/wcauchois/websocket-fallback) who provided the nice wrapper for the WebSockets fallback
