@@ -47,6 +47,373 @@ if (program.info) {
   process.exit(0);
 }
 
+function main() {
+
+  var port = program.port || 6767;
+
+  var clients = [];
+  var currentClient = null;
+
+  var prompto = null;
+  var useNL = false;
+
+  var rl = new Readliner();
+
+  rl.setPrompt("(0)> ");
+
+  var httpServer = http.createServer(function (request, response) {
+
+    var content = ""
+      , status = 200
+      , mime = 'text/html'
+      , ua = request.headers['user-agent'];
+
+    switch (request.url) {
+
+      case '/':
+        content = "Welcome";
+        break;
+
+      // If not supporting websocket...
+      case '/log':
+        var body = '';
+        request.on('data', function (data) {
+          body += data;
+        });
+        request.on('end', function () {
+          output(decodeMsg(body), request.connection.remoteAddress);
+        });
+        break;
+
+      case '/jecho.js':
+        var lines = [], i=0;
+        var asString;
+
+        lines[i++] = ";(function(window) {";
+        lines[i++] = "var jecho = {";
+        for (var x in jechoClient) {
+          asString = jechoClient[x].toString();
+          asString = asString.replace("\"%USEXHR%\"", !!program.xhr);
+          asString = asString.replace("%VERSION%", "\"" + version + "\"");
+          lines[i++] = "  " + x + ": " + ( util.isArray(jechoClient[x]) ? ( "[" + asString + "]" ) : asString ) + ",";
+        }
+        lines[i++] = "};";
+        lines[i++] = "window.jecho = jecho.init();";
+        lines[i++] = "})(this);";
+        content = lines.join("\n");
+        mime = "text/javascript";
+        break;
+
+      default:
+        content = "Page not found";
+        status = 404;
+        break;
+
+    }
+
+    response.writeHead(status, { 'Content-Type': mime, "Access-Control-Allow-Origin": "*" });
+    response.end(content, 'utf-8');
+
+  }).listen(port);
+
+  httpServer.on("error", function(e) {
+    console.log(e.toString())
+    process.exit(1);
+  })
+
+  var server = new ConnectionServer({httpServer: httpServer});
+
+  server.on('connection', function(conn) {
+
+    clients.push(conn);
+
+    currentClient = conn;
+
+    output("New " + conn.specs + " WebSocket client connected (" + conn.remoteAddress + ")");
+
+    conn.on('message', function(msg) {
+
+      currentClient = conn;
+
+      output(decodeMsg(msg), conn.remoteAddress);
+
+    });
+
+    conn.on('close', function() {
+
+      output("Client " + currentClient.remoteAddress + " disconnected");
+
+      // Current client is about to close. Find another one
+      if (currentClient == conn) {
+        currentClient = null;
+      }
+
+      for (var i=0; i < clients.length; i++) {
+        if (clients[i] == conn) {
+          clients.splice(i,1);
+          break;
+        }
+      }
+
+      if (clients.length > 0) {
+        currentClient = clients[0];
+      }
+
+      prompt(false);
+
+    });
+
+  });
+
+  rl.on("line", function(line) {
+
+    if ("" == line.trim()) {
+      prompt(false);
+      return;
+    }
+
+    if (program.xhr) {
+      output("Using XHR: sorry, cannot send.");
+      prompt(false);
+      return;
+    }
+
+    prompt(true);
+
+    if (currentClient) {
+      currentClient.send( '! ' + line );
+    }
+
+  });
+
+  setTimeout(function() {
+    rl.start();
+  }, 100);
+
+  output('Starting Jecho server on port ' + port + '...');
+
+  function prompt(whiny) {
+    var n = clients.length;
+    if (!currentClient && whiny) {
+      output("I feel alone...");
+    }
+    rl.setPrompt("(" + n + ( n > 0 ? (":" + currentClient.remoteAddress) : '' ) + ")> ");
+    rl.prompt();
+    useNL = true;
+  }
+
+  function output(msg, subject) {
+
+    if (!subject) {
+      subject = "<System>";
+    }
+
+    var dir, text;
+
+    if (typeof msg === 'string' || typeof msg === 'undefined') {
+      dir = '--';
+      text = msg;
+    } else {
+      switch ( msg.type ) {
+
+        case '!':
+          dir = '<>';
+          text = JSON.stringify(msg.data, undefined, 2);
+          break;
+
+        case 'l':
+          dir = '>>';
+          text = JSON.stringify(msg.data, undefined, 2);
+          break;
+
+        case 'e':
+          dir = '>!';
+          text = msg.data;
+          break;
+
+        default:
+          dir = '??';
+          text = "" + msg.data;
+          break;
+
+      }
+
+    }
+
+    var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
+
+    util.print((useNL ? "\n" : "") + d + " - " + subject.color("cyan") + " " + dir + " " + text.color("yellow") + "\n");
+
+    clearTimeout(prompto);
+    prompto = setTimeout(function() {
+      prompt(false);
+    }, 500);
+    useNL = false;
+  }
+
+  function decodeMsg(msg) {
+    var payload;
+    try {
+      payload = JSON.parse(msg);
+    } catch(e) {
+      payload = 'ERR: decoding message';
+    }
+    return payload;
+  }
+
+}
+
+// This is going to run in the Browser
+
+var jechoClient = {
+
+  initialized: false,
+
+  version: "%VERSION%",
+
+  buffer: [],
+
+  init: function() {
+
+    var _self = this;
+
+    this.useXHR = "%USEXHR%";
+
+    this.serverURL = this.getServerURL();
+
+    if (window.addEventListener) {
+      window.addEventListener('error', function( e ) {
+        var text = "JS error captured: ";
+        if (e.message) {
+          text += "[" + e.message + "] in [" + e.filename + ":" + e.lineno + "]";
+        } else {
+          text += "[unable to fetch error details. Try listening to window.onerror]"
+        }
+        _self.send('e', text);
+      }, false);
+    }
+
+    if (!this.useXHR) {
+
+      this.wsocket = new WebSocket(this.serverURL.replace("http", "ws"));
+
+      this.wsocket.addEventListener("open", function(event) {
+
+        _self.wsSend('l', navigator.userAgent);
+
+        for (var i=0; i < _self.buffer.length; i++) {
+          _self.wsSend( _self.buffer[i].type, _self.buffer[i].data );
+        }
+
+        _self.buffer.length = 0;
+
+      });
+
+      this.wsocket.addEventListener("message", function(event) {
+
+        var command = event.data.split(" "), args;
+        var result, fn;
+
+        switch (command[0]) {
+
+          case '!':
+            args = command.slice(1).join(" ");
+            try {
+              (function() { result = window.eval.call(window, args); })();
+              _self.wsSend( '!', result );
+            } catch(e) {
+              if (typeof result != 'undefined') {
+                _self.wsSend( '!' , Object.getOwnPropertyNames(result).sort() );
+              } else {
+                _self.wsSend( 'e', "Error: " + e.message);
+              }
+            }
+            break;
+        }
+      });
+
+      this.wsocket.addEventListener("close", function(event) {
+        this.initialized = false;
+      });
+
+    } else {
+      this.send('l', navigator.userAgent);
+    }
+
+    this.initialized = true;
+
+    return this;
+  },
+
+  wsSend: function(type, data) {
+
+    var msg = { type: type, data: (typeof data == 'undefined' ? 'JS UNDEFINED' : ( data === null ? 'JS NULL' : data ) ) };
+
+    if (this.wsocket.readyState === 0) {
+      this.buffer.push(msg);
+      return;
+    }
+
+    this.wsocket.send( JSON.stringify( msg ) );
+  },
+
+  xhrSend: function( type, data ) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', this.serverURL + 'log', true);
+    xhr.setRequestHeader('Content-Type', 'text/plain');
+    xhr.send( JSON.stringify( { type: type, data: data } ) );
+  },
+
+  send: function( type, data ) {
+    this.useXHR ? this.xhrSend( type, data ) : this.wsSend( type, data );
+  },
+
+  log: function(m) {
+
+    if (!this.initialized) {
+      this.init();
+    }
+
+    this.send( 'l', m );
+  },
+
+  safariVersion: function() {
+    return parseInt(window.navigator.userAgent.match(/Version\/(.*?)\s/)[1][0], 10);
+  },
+
+  isSafariOnIOS: function() {
+    return !!window.navigator.userAgent.match(/safari/i) && !!window.navigator.userAgent.match(/(iPad|iPhone|iPod)/i);
+  },
+
+  getServerURL: function() {
+    var pattern = /(http:\/\/(.*?)\/)/
+      , match;
+
+    script = findScript();
+
+    match = pattern.exec(script.src);
+
+    return match ? match[1] : null;
+
+    function findScript() {
+      var elements = document.getElementsByTagName("script")
+        , scripts = ["jecho.", "jecho.min."]
+        , i
+        , j
+        , element;
+
+      for (i = 0; i < elements.length; i++) {
+        element = elements[i];
+        for (j=0; j < scripts.length; j++) {
+          if (-1 != element.src.indexOf("/" + scripts[j])) {
+            return element;
+          }
+        }
+      }
+    }
+  }
+};
+
 var Readliner = function() {
 
   events.EventEmitter.call(this);
@@ -121,317 +488,6 @@ Readliner.prototype.start = function() {
 Readliner.prototype.setPrompt = function(p) {
   this.interface.setPrompt(p);
 }
-
-function main() {
-
-  var port = program.port || 6767;
-
-  var clients = [];
-  var currentClient = null;
-
-  var prompto = null;
-  var useNL = false;
-
-  var rl = new Readliner();
-
-  rl.setPrompt("(0)> ");
-
-  var httpServer = http.createServer(function (request, response) {
-
-    var content = ""
-      , status = 200
-      , mime = 'text/html'
-      , ua = request.headers['user-agent'];
-
-    switch (request.url) {
-
-      case '/':
-        content = "Welcome";
-        break;
-
-      // If not supporting websocket...
-      case '/log':
-        var body = '';
-        request.on('data', function (data) {
-          body += data;
-        });
-        request.on('end', function () {
-          output(body, request.connection.remoteAddress);
-        });
-        break;
-
-      case '/jecho.js':
-        var lines = [], i=0;
-        var asString;
-
-        lines[i++] = ";(function(window) {";
-        lines[i++] = "var jecho = {";
-        for (var x in jecho) {
-          asString = jecho[x].toString();
-          asString = asString.replace("\"%USEXHR%\"", !!program.xhr);
-          asString = asString.replace("%VERSION%", "\"" + version + "\"");
-          lines[i++] = "  " + x + ": " + ( util.isArray(jecho[x]) ? ( "[" + asString + "]" ) : asString ) + ",";
-        }
-        lines[i++] = "};";
-        lines[i++] = "jecho.init();";
-        lines[i++] = "window.jecho = jecho;";
-        lines[i++] = "})(this);";
-        content = lines.join("\n");
-        mime = "text/javascript";
-        break;
-
-      default:
-        content = "Page not found";
-        status = 404;
-        break;
-
-    }
-
-    response.writeHead(status, { 'Content-Type': mime, "Access-Control-Allow-Origin": "*" });
-    response.end(content, 'utf-8');
-
-  }).listen(port);
-
-  httpServer.on("error", function(e) {
-    console.log(e.toString())
-    process.exit(1);
-  })
-
-  var server = new ConnectionServer({httpServer: httpServer});
-
-  server.on('connection', function(conn) {
-
-    clients.push(conn);
-
-    currentClient = conn;
-
-    output("New " + conn.specs + " WebSocket client connected (" + conn.remoteAddress + ")");
-
-    conn.on('message', function(msg) {
-
-      currentClient = conn;
-
-      output(msg, conn.remoteAddress);
-
-    });
-
-    conn.on('close', function() {
-
-      output("Client " + currentClient.remoteAddress + " disconnected");
-
-      // Current client is about to close. Find another one
-      if (currentClient == conn) {
-        currentClient = null;
-      }
-
-      for (var i=0; i < clients.length; i++) {
-        if (clients[i] == conn) {
-          clients.splice(i,1);
-          break;
-        }
-      }
-
-      if (clients.length > 0) {
-        currentClient = clients[0];
-      }
-
-      prompt(false);
-
-    });
-
-  });
-
-  rl.on("line", function(line) {
-
-    if ("" == line.trim()) {
-      prompt(false);
-      return;
-    }
-
-    if (program.xhr) {
-      output("Using XHR: sorry, cannot send.");
-      prompt(false);
-      return;
-    }
-
-    prompt(true);
-
-    if (currentClient) {
-      currentClient.send( '? ' + line );
-    }
-
-  });
-
-  setTimeout(function() {
-    rl.start();
-  }, 100);
-
-  output('Starting Jecho server on port ' + port + '...');
-
-  function prompt(whiny) {
-    var n = clients.length;
-    if (!currentClient && whiny) {
-      output("I feel alone...");
-    }
-    rl.setPrompt("(" + n + ( n > 0 ? (":" + currentClient.remoteAddress) : '' ) + ")> ");
-    rl.prompt();
-    useNL = true;
-  }
-
-  function output(msg, subject) {
-
-    if (!subject) {
-      subject = "<System>";
-    }
-
-    var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
-
-    util.print((useNL ? "\n" : "") + d + " - " + subject.color("cyan") + " - " + msg.color("yellow") + "\n");
-
-    clearTimeout(prompto);
-    prompto = setTimeout(function() {
-      prompt(false);
-    }, 500);
-    useNL = false;
-  }
-
-}
-
-// This is going to run in the Browser
-
-var jecho = {
-
-  initialized: false,
-
-  version: "%VERSION%",
-
-  buffer: [],
-
-  init: function() {
-
-    var _self = this;
-
-    this.useXHR = "%USEXHR%";
-
-    this.serverURL = this.getServerURL();
-
-    if (!this.useXHR) {
-
-      this.wsocket = new WebSocket(this.serverURL.replace("http", "ws"));
-
-      this.wsocket.addEventListener("open", function(event) {
-
-        _self.wsocket.send(navigator.userAgent);
-
-        for (var i=0; i < _self.buffer.length; i++) {
-          _self.wsocket.send( _self.buffer[i] );
-        }
-
-        _self.buffer.length = 0;
-
-      });
-
-      this.wsocket.addEventListener("message", function(event) {
-
-        var command = event.data.split(" ");
-        var result;
-
-        switch (command[0]) {
-
-          case '?':
-            try {
-              result = eval( command.slice(1).join(" ") );
-              _self.wsSend(JSON.stringify(result, undefined, 2));
-            } catch(e) {
-              if (typeof result != 'undefined') {
-                _self.wsSend(JSON.stringify(Object.getOwnPropertyNames(result).sort(), undefined, 2));
-              } else {
-                _self.wsSend("ERR: " + e.message);
-              }
-            }
-            break;
-
-        }
-      });
-
-      this.wsocket.addEventListener("close", function(event) {
-        this.initialized = false;
-      });
-
-    } else {
-      this.xhrSend(navigator.userAgent);
-    }
-
-    this.initialized = true;
-  },
-
-  wsSend: function(m) {
-
-    if (this.wsocket.readyState === 0) {
-      this.buffer.push(m);
-      return;
-    }
-
-    this.wsocket.send(m);
-  },
-
-  xhrSend: function(m) {
-    var xhr;
-    xhr = new XMLHttpRequest();
-    xhr.open('POST', this.serverURL + 'log', true);
-    xhr.setRequestHeader('Content-Type', 'text/plain');
-    xhr.send(m);
-  },
-
-  send: function(m) {
-    this.useXHR ? this.xhrSend(m) : this.wsSend(m);
-  },
-
-  log: function(m) {
-
-    if (!this.initialized) {
-      this.init();
-    }
-
-    this.send(JSON.stringify(m, undefined, 2));
-  },
-
-  safariVersion: function() {
-    return parseInt(window.navigator.userAgent.match(/Version\/(.*?)\s/)[1][0], 10);
-  },
-
-  isSafariOnIOS: function() {
-    return !!window.navigator.userAgent.match(/safari/i) && !!window.navigator.userAgent.match(/(iPad|iPhone|iPod)/i);
-  },
-
-  getServerURL: function() {
-    var pattern = /(http:\/\/(.*?)\/)/
-      , match;
-
-    script = findScript();
-
-    match = pattern.exec(script.src);
-
-    return match ? match[1] : null;
-
-    function findScript() {
-      var elements = document.getElementsByTagName("script")
-        , scripts = ["jecho.", "jecho.min."]
-        , i
-        , j
-        , element;
-
-      for (i = 0; i < elements.length; i++) {
-        element = elements[i];
-        for (j=0; j < scripts.length; j++) {
-          if (-1 != element.src.indexOf("/" + scripts[j])) {
-            return element;
-          }
-        }
-      }
-    }
-  }
-};
 
 // Extends the core String object to add a simple ANSI colouring
 // https://github.com/Yuffster/npm-string-ansi/blob/master/string-ansi.js

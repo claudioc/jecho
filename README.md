@@ -17,11 +17,23 @@ asynchronous messages to the server. The `jecho.log()` obviously resembles the c
 Features
 --------
 
-jecho support bidirectional communication thanks to WebSockets. The support is provided for the legacy and current WebSocket specifications (tested on iOS 4, 5, 6 and some versions of Android).
+- supports bidirectional communication, thanks to WebSockets. The support is provided for the legacy and current WebSocket specifications (tested on iOS 4, 5, 6 and some versions of Android).
+- if for some reasons WebSockets are not supported, then you can still use the `jecho.log()` thanks to XMLHttpRequest and CORS. In this case you'll not be able to send commands to the browser, but just receive the output from jecho.log.
+- command line handled by readline with history (saved in ~/.jecho-history)
+- uses smart eval() - meaning that "var foobar" will create a real, global foobar
+- automatically catches and report JavaScript errors (not using window.onerror, so joy with Firefox)
 
-If for some reasons WebSockets are not supported, then you can still use the `jecho.log()` thanks to XMLHttpRequest and CORS. In this case you'll not be able to send commands to the browser, but just receive the output from jecho.log.
+Output
+------
 
-The command line is handled by readline and the history is saved in ~/.jecho-history
+Each output line is composed by four elements: a timestamp, the IP address of the client, and indicator and the message
+The indicator element is a symbol with the following meanings:
+- `>>` a log message has been received from the client (unattended)
+- `<>` a response to a query has been received by the client
+- `>!` an error has been captured by the client
+- `--` internal message (not from the client)
+
+Please note the `undefined` and `null` values are printed as `JS UNDEFINED` and `JS NULL`
 
 Limitations
 -----------
