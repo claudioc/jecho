@@ -21,7 +21,7 @@ Features
 - if for some reasons WebSockets are not supported, then you can still use the `jecho.log()` thanks to XMLHttpRequest and CORS. In this case you'll not be able to send commands to the browser, but just receive the output from jecho.log
 - command line handled by readline with history (saved in ~/.jecho-history)
 - uses smart eval() - meaning that "var foobar = 67" will create a real, global foobar
-- automatically catches and reports JavaScript errors (not using window.onerror, so no joy with Firefox)
+- automatically catches and reports JavaScript errors
 
 Output
 ------

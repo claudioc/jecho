@@ -29,7 +29,7 @@ try {
   process.exit(1);
 }
 
-var version = "0.1.6";
+var version = "0.1.7";
 
 program
   .version(version)
@@ -281,16 +281,13 @@ var jechoClient = {
 
     this.serverURL = this.getServerURL();
 
-    if (window.addEventListener) {
-      window.addEventListener('error', function( e ) {
-        var text = "JS error captured: ";
-        if (e.message) {
-          text += "[" + e.message + "] in [" + e.filename + ":" + e.lineno + "]";
-        } else {
-          text += "[unable to fetch error details. Try listening to window.onerror]"
-        }
-        _self.send('e', text);
-      }, false);
+    var oldOnError = window.onerror;
+    window.onerror = function (message, filename, lineno) {
+      _self.send('e', "JS error captured: [" + message + "] in [" + filename + ":" + lineno + "]");
+      if (typeof oldOnError == 'function') {
+        return oldOnError(message, filename, lineno);
+      }
+      return false;
     }
 
     if (!this.useXHR) {
