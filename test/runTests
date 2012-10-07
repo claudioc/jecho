@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+
+var fs = require('fs'),
+    sys = require('sys'),
+    args = process.argv,
+    foundTests = [],
+    start = new Date(),
+    end, tests = [], i;
+
+try {
+  var reporter = require('nodeunit').reporters.default;
+} catch(e) {
+  console.log("To be able to run tests, please npm install nodeunit.");
+  process.exit();
+}
+
+function readDirectory(files, directory) {
+  var i = files.length,
+      file;
+
+  while (i--) {
+    if (files[i].lastIndexOf('.') !== 0) {
+      file = directory + '/' + files[i];
+      if (fs.statSync(file).isDirectory()) {
+        foundTests.concat(readDirectory(fs.readdirSync(file), file));
+      } else if (/test\-.*\.js$/.test(file)) {
+      console.log(file);
+        foundTests.push(file);
+      }
+    }
+  }
+
+  return foundTests;
+}
+
+tests = readDirectory(fs.readdirSync(__dirname), '.');
+
+end = new Date();
+
+sys.puts("\033[1m" + 'Found ' + tests.length + ' Tests in ' + (end - start) + 'ms' + "\033[22m");
+for (i = 0; i < tests.length; i++) {
+    sys.puts('    ➞ ' + tests[i]);
+}
+
+reporter.run(tests);

@@ -1,6 +1,6 @@
 {
   "name": "jecho",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "JavaScript remote web debugging tool",
   "author": "Claudio Cicali <claudio.cicali@gmail.com>",
   "main": "jecho.js",
@@ -9,10 +9,16 @@
     { "type" : "git",
       "url" : "https://github.com/claudioc/jecho"
     },
+  "directories" : { "lib" : "./lib/" },
   "dependencies": {
     "commander": ">=0.1.0",
     "websocket": ">=0.1.0",
     "websocket-server": ">=0.1.0"
   },
-  "engine": "node >=0.8.0"
+ "engine": "node >=0.8.0",
+ "licenses":
+  [ { "type" : "MIT"
+    , "url" : "http://github.com/claudioc/jecho/raw/master/LICENSE"
+    }
+  ]
 }
