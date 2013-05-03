@@ -1,6 +1,11 @@
 
 #Jecho ChangeLog
 
+0.1.9 - October 9th, 2012
+-----
+
+- HUGE bug fixed!
+
 0.1.8 - October 7th, 2012
 -----
 
