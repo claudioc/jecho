@@ -220,6 +220,9 @@ function main() {
       }
 
     }
+    if (typeof text == 'undefined') {
+      text = "";
+    }
 
     var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
 
