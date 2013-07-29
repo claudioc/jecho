@@ -1,6 +1,12 @@
 
 #Jecho ChangeLog
 
+0.1.10 - July 29th, 2013
+-----
+
+- fixed a crash
+- added the order number to the output
+
 0.1.9 - October 9th, 2012
 -----
 

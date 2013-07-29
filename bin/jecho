@@ -22,7 +22,7 @@ try {
   process.exit(1);
 }
 
-var version = "0.1.9";
+var version = "0.1.10";
 
 program
   .version(version)
@@ -204,7 +204,7 @@ function main() {
 
         case 'l':
           dir = '>>';
-          text = JSON.stringify(msg.data, undefined, 2);
+          text = "#" + msg.id + " - " + JSON.stringify(msg.data, undefined, 2);
           break;
 
         case 'e':
