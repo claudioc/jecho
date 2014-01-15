@@ -7,6 +7,7 @@
 
 var http = require('http')
   , util = require("util")
+  , os = require('os')
   , program
   , JechoClient = require('../lib/JechoClient').JechoClient
   , Readliner = require('../lib/Readliner').Readliner
@@ -22,12 +23,12 @@ try {
   process.exit(1);
 }
 
-var version = "0.1.10";
+var version = "0.1.12";
 
 program
   .version(version)
   .option('-p, --port <n>', 'Port to listen to, defaults to 6767')
-  .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS')
+  .option('-x, --xhr', 'Bypass WebSocket and use only XHR with CORS (for old devices)')
   .option('-i, --info', 'Output program informations')
   .parse(process.argv);
 
@@ -102,6 +103,17 @@ function main() {
     process.exit(1);
   })
 
+  var ifaces = os['networkInterfaces' in os ? 'networkInterfaces' : 'getNetworkInterface']();
+  var networkInterface = "unknown";
+
+  for (iface in ifaces) {
+    ifaces[iface].forEach(function(iface) {
+      if (!iface.internal && iface.family == 'IPv4') {
+        networkInterface = iface.address;
+      }
+    });
+  }
+
   var server = new ConnectionServer({httpServer: httpServer});
 
   server.on('connection', function(conn) {
@@ -171,7 +183,12 @@ function main() {
     rl.start();
   }, 100);
 
-  output('Starting Jecho server on port ' + port + '...');
+  output('Starting Jecho server on port ' + port + ';');
+  output('Serving jecho.js from http://' + networkInterface + ':' + port + '/jecho.js');
+
+  if (program.xhr) {
+    output("Using only XHR, as requested");
+  }
 
   function prompt(whiny) {
     var n = clients.length;
