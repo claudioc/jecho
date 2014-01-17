@@ -6,13 +6,15 @@ jecho is a client/server remote debugging tool written for Node.js, which aims t
 mobile web developer. It can be used with almost every browser, even desktop ones, but in those
 cases much more powerful debug tools already exist.
 
-Basically you run the jecho server and you receive a command line. Whatever string you enter
+Basically you run the jecho server and you'll receive a command line. Whatever string you enter
 from this command line is then sent to the (eventually) connected client(s) (i.e.: a web page opened
 in a mobile device). That string is then eval'uated in the browser as JavaScript code and the result sent back
 to the server, which in turn will display it.
 
 Additionally, a `jecho.log()` utility is provided to be used from within the web page, so that you can send
 asynchronous messages to the server. The `jecho.log()` obviously resembles the console.log() tool, but it isn't powerful that much: the serialization of objects is just a `JSON.stringify(obj, undefined, 2)`.
+
+You can also use the `jecho.inspect()` method to deliver a small report about the dimensions of the window, the dimensions of an HTML element (i.e. `jecho.inspect(document.body);`) or a specific CSS property (i.e. `jecho.inspect(document.body, "margin-right");`).
 
 Features
 --------
@@ -68,6 +70,8 @@ Insert a JavaScript script tag in the page which you want to enhance with jecho:
 <script src="http://<jecho server ip address and port>/jecho.js"></script>
 <script>
  jecho.log("Hello from the jecho client!");
+ // Will show a nice report on the server console
+ jecho.inspect();
 </script>
 ```
 
