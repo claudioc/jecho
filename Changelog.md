@@ -1,6 +1,13 @@
 
 #Jecho ChangeLog
 
+0.2.0 - January 17th, 2014
+-----
+
+- Fallback to XHR for devices not supporting WebSockets
+- Added the inspect client method to show an element (or window) info
+- Some cosmetic tunings
+
 0.1.10 - July 29th, 2013
 -----
 
