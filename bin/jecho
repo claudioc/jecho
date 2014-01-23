@@ -13,6 +13,15 @@ var http = require('http')
   , Readliner = require('../lib/Readliner').Readliner
   , ConnectionServer = require('../lib/wswrapper').ConnectionServer;
 
+String.prototype.padZero= function(len, c){
+  var s= '', c= c || '0', len= (len || 2)-this.length;
+  while(s.length<len) s+= c;
+  return s+this;
+}
+
+Number.prototype.padZero= function(len, c){
+  return String(this).padZero(len,c);
+}
 require('../lib/color');
 
 try {
@@ -23,7 +32,7 @@ try {
   process.exit(1);
 }
 
-var version = "0.2.0";
+var version = "0.2.1";
 
 program
   .version(version)
@@ -241,7 +250,8 @@ function main() {
       text = "";
     }
 
-    var d = (new Date()).toString().match(/\d+:\d+:\d+/)[0].color('white');
+    var d = new Date();
+    d = d.toString().match(/\d+:\d+:\d+/)[0].color('white').color("bold") + ("." + d.getMilliseconds().padZero(3)).color('white');
 
     util.print((useNL ? "\n" : "") + d + " - " + subject.color("cyan") + " " + dir.color("bgyellow").color("black") + " " + text.replace(/\\n/g, "\n").color("yellow") + "\n");
 

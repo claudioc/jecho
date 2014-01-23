@@ -1,6 +1,6 @@
 {
   "name": "jecho",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "JavaScript remote web debugging tool",
   "author": "Claudio Cicali <claudio.cicali@gmail.com>",
   "main": "jecho.js",
