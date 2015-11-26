@@ -11,7 +11,7 @@ var http = require('http')
   , program
   , JechoClient = require('../lib/JechoClient').JechoClient
   , Readliner = require('../lib/Readliner').Readliner
-  , ConnectionServer = require('../lib/wswrapper').ConnectionServer;
+//  , ConnectionServer = require('../lib/wswrapper').ConnectionServer;
 
 String.prototype.padZero= function(len, c){
   var s= '', c= c || '0', len= (len || 2)-this.length;
@@ -32,7 +32,7 @@ try {
   process.exit(1);
 }
 
-var version = "0.2.2";
+var version = "0.2.3";
 
 program
   .version(version)
@@ -123,7 +123,10 @@ function main() {
     });
   }
 
-  var server = new ConnectionServer({httpServer: httpServer});
+  var WebSocketServer = require('ws').Server
+    , server = new WebSocketServer({ server: httpServer });
+
+  //var server = new ConnectionServer({httpServer: httpServer});
 
   server.on('connection', function(conn) {
 

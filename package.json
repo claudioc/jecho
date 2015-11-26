@@ -1,6 +1,6 @@
 {
   "name": "jecho",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "JavaScript remote web debugging tool",
   "author": "Claudio Cicali <claudio.cicali@gmail.com>",
   "main": "jecho.js",
@@ -15,7 +15,7 @@
   "dependencies": {
     "commander": ">=0.1.0",
     "websocket": ">=0.1.0",
-    "websocket-server": ">=0.1.0"
+    "ws": "^0.8.0"
   },
   "engine": "node >=0.8.0",
   "licenses": [
